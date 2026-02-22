@@ -1,8 +1,11 @@
 import "dotenv/config";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { render, Box, Text, useInput, useApp, useStdout } from "ink";
 import { Octokit } from "@octokit/rest";
 import { execSync } from "child_process";
+import { unified } from "unified";
+import remarkParse from "remark-parse";
+import remarkGfm from "remark-gfm";
 
 const GITHUB_USERNAME = process.env.GITHUB_USER ?? "";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN ?? "";
@@ -36,6 +39,9 @@ const LIST_BORDER_LINES = 2;
 const INDICATOR_LINES = 2;
 const OVERHEAD = HEADER_LINES + HINTS_LINES + LIST_BORDER_LINES + INDICATOR_LINES; // 13
 
+// Width of the compact list pane in the split-view layout
+const LIST_SPLIT_WIDTH = 32;
+
 function timeAgo(date: string | null): string {
   if (!date) return "never";
   const diff = Date.now() - new Date(date).getTime();
@@ -64,6 +70,173 @@ function copyToClipboard(text: string): void {
       execSync("xsel --clipboard --input", { input: text });
     }
   }
+}
+
+function stripMarkdown(md: string): string {
+  return (
+    md
+      .replace(/```[^\n]*\n([\s\S]*?)```/g, (_, code) => code.trim())
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/!\[.*?\]\(.*?\)/g, "")
+      .replace(/\[(.*?)\]\(.*?\)/g, "$1")
+      .replace(/<\/?[^>]+(>|$)/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/^\|.*\|$/gm, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/[ \t]+$/gm, "")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .trim()
+  );
+}
+
+type MdNode = {
+  type: string;
+  children?: MdNode[];
+  value?: string;
+  depth?: number;
+  url?: string;
+  ordered?: boolean;
+  lang?: string;
+};
+
+const mdParser = unified().use(remarkParse).use(remarkGfm);
+
+function collectText(node: MdNode): string {
+  if (node.type === "html") return "";
+  if (node.value) return node.value;
+  return (node.children ?? []).map(collectText).join("");
+}
+
+function MarkdownRenderer({ content, width, scroll, height }: { content: string; width: number; scroll: number; height: number }) {
+  const tree = mdParser.parse(content) as unknown as MdNode;
+  const lines: React.ReactNode[] = [];
+  flattenMdNode(tree, width, lines, 0);
+  const totalLines = lines.length;
+  const maxScroll = Math.max(0, totalLines - height);
+  const clampedScroll = Math.min(scroll, maxScroll);
+  const visible = lines.slice(clampedScroll, clampedScroll + height);
+  return (
+    <Box flexDirection="column" width={width}>
+      {visible.map((line, i) => (
+        <Box key={clampedScroll + i} width={width}>{line}</Box>
+      ))}
+    </Box>
+  );
+}
+
+function flattenMdNode(node: MdNode, width: number, lines: React.ReactNode[], indent: number): void {
+  switch (node.type) {
+    case "root":
+      for (const child of node.children ?? []) {
+        flattenMdNode(child, width, lines, indent);
+      }
+      break;
+    case "heading": {
+      const color = node.depth === 1 ? "cyan" : node.depth === 2 ? "magenta" : undefined;
+      const text = collectText(node);
+      lines.push(<Text bold color={color} wrap="truncate">{text}</Text>);
+      lines.push(<Text> </Text>);
+      break;
+    }
+    case "paragraph": {
+      const text = collectText(node);
+      const maxW = width - indent;
+      const wrapped = wrapText(text, maxW);
+      for (const wl of wrapped) {
+        lines.push(<Text wrap="truncate">{wl}</Text>);
+      }
+      lines.push(<Text> </Text>);
+      break;
+    }
+    case "list":
+      for (const child of node.children ?? []) {
+        flattenMdNode(child, width, lines, indent);
+      }
+      lines.push(<Text> </Text>);
+      break;
+    case "listItem":
+      for (let ci = 0; ci < (node.children ?? []).length; ci++) {
+        const child = node.children![ci];
+        if (child.type === "paragraph") {
+          const text = collectText(child);
+          const maxW = width - indent - 2;
+          const wrapped = wrapText(text, maxW);
+          for (let wi = 0; wi < wrapped.length; wi++) {
+            const prefix = wi === 0 ? "• " : "  ";
+            lines.push(<Text wrap="truncate">{prefix}{wrapped[wi]}</Text>);
+          }
+        } else {
+          flattenMdNode(child, width, lines, indent + 2);
+        }
+      }
+      break;
+    case "blockquote":
+      for (const child of node.children ?? []) {
+        if (child.type === "paragraph") {
+          const text = collectText(child);
+          const maxW = width - indent - 2;
+          const wrapped = wrapText(text, maxW);
+          for (const wl of wrapped) {
+            lines.push(<Text dimColor wrap="truncate">│ {wl}</Text>);
+          }
+        } else {
+          flattenMdNode(child, width, lines, indent + 2);
+        }
+      }
+      lines.push(<Text> </Text>);
+      break;
+    case "code": {
+      const codeLines = (node.value ?? "").split("\n");
+      for (const cl of codeLines) {
+        lines.push(<Text color="yellow" wrap="truncate">{cl}</Text>);
+      }
+      lines.push(<Text> </Text>);
+      break;
+    }
+    case "thematicBreak":
+      lines.push(<Text dimColor>{"─".repeat(Math.min(width, 40))}</Text>);
+      lines.push(<Text> </Text>);
+      break;
+    case "table":
+      for (const row of node.children ?? []) {
+        const cells = (row.children ?? []).map((cell) => collectText(cell));
+        lines.push(<Text wrap="truncate">{cells.join(" │ ")}</Text>);
+      }
+      lines.push(<Text> </Text>);
+      break;
+    case "html":
+      break;
+    default:
+      if (node.children) {
+        for (const child of node.children) {
+          flattenMdNode(child, width, lines, indent);
+        }
+      } else if (node.value) {
+        lines.push(<Text wrap="truncate">{node.value}</Text>);
+      }
+      break;
+  }
+}
+
+function wrapText(text: string, width: number): string[] {
+  if (width <= 0) return [text];
+  const result: string[] = [];
+  const words = text.split(/\s+/);
+  let line = "";
+  for (const word of words) {
+    if (!word) continue;
+    if (line.length === 0) {
+      line = word;
+    } else if (line.length + 1 + word.length <= width) {
+      line += " " + word;
+    } else {
+      result.push(line);
+      line = word;
+    }
+  }
+  if (line) result.push(line);
+  if (result.length === 0) result.push("");
+  return result;
 }
 
 // ── LAZYGH logo — 6 lines, cyan → green gradient ──────────────
@@ -103,25 +276,33 @@ const Hint = React.memo(function Hint({ keys, action }: { keys: string; action: 
 // ── Memoized repo row — only re-renders when its own props change ──
 // With 20 visible rows and 2 changing per keypress, this skips 18 reconciliations.
 const RepoRow = React.memo(function RepoRow({
-  repo, isCursor, isSelected,
+  repo, isCursor, isSelected, compact = false,
 }: {
   repo: Repo;
   isCursor: boolean;
   isSelected: boolean;
+  compact?: boolean;
 }) {
+  const nameWidth = compact ? 20 : 36;
   return (
     <Box gap={1} paddingX={1}>
       <Text color={isSelected ? "red" : undefined}>{isSelected ? "◆" : " "}</Text>
       <Text color={isCursor ? "cyan" : undefined} bold={isCursor} inverse={isCursor}>
-        {truncate(repo.name, 36).padEnd(36)}
+        {truncate(repo.name, nameWidth).padEnd(nameWidth)}
       </Text>
       <Text color={repo.private ? "yellow" : "green"} bold>
-        {repo.private ? "⊘ priv " : "◉ pub  "}
+        {compact
+          ? repo.private ? "⊘" : "◉"
+          : repo.private ? "⊘ priv " : "◉ pub  "}
       </Text>
-      <Text color="magenta">
-        {(repo.language ? truncate(repo.language, 11) : "").padEnd(11)}
-      </Text>
-      <Text dimColor>{timeAgo(repo.pushed_at)}</Text>
+      {!compact && (
+        <>
+          <Text color="magenta">
+            {(repo.language ? truncate(repo.language, 11) : "").padEnd(11)}
+          </Text>
+          <Text dimColor>{timeAgo(repo.pushed_at)}</Text>
+        </>
+      )}
     </Box>
   );
 });
@@ -141,10 +322,19 @@ function App() {
   const [createName, setCreateName] = useState("");
   const [notification, setNotification] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [readmeScroll, setReadmeScroll] = useState(0);
+  const [focusPane, setFocusPane] = useState<"list" | "readme">("list");
 
   const terminalHeight = stdout?.rows ?? 24;
+  const terminalWidth = stdout?.columns ?? 80;
   // How many repo rows fit in the remaining space after fixed chrome
   const visibleCount = Math.max(3, terminalHeight - OVERHEAD);
+
+  // ── README split-pane state ──
+  const readmeCache = useRef<Map<number, string>>(new Map());
+  const readmeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [readme, setReadme] = useState<string | null>(null);
+  const [readmeLoading, setReadmeLoading] = useState(false);
 
   // On terminal resize, clamp scrollOffset so cursor stays visible
   useEffect(() => {
@@ -155,6 +345,10 @@ function App() {
       return scrollOffset === prev.scrollOffset ? prev : { ...prev, scrollOffset };
     });
   }, [visibleCount]);
+
+  useEffect(() => {
+    setReadmeScroll(0);
+  }, [cursor]);
 
   // Single atomic nav update — one setState, one render, no jitter.
   // useCallback keeps the reference stable so useInput doesn't re-subscribe every render.
@@ -185,6 +379,39 @@ function App() {
       });
   }, []);
 
+  useEffect(() => {
+    if (screen !== "list") return;
+    const repo = repos[cursor];
+    if (!repo) return;
+
+    if (readmeTimer.current) clearTimeout(readmeTimer.current);
+
+    if (readmeCache.current.has(repo.id)) {
+      setReadme(readmeCache.current.get(repo.id)!);
+      setReadmeLoading(false);
+      return;
+    }
+
+    setReadmeLoading(true);
+    setReadme(null);
+
+    readmeTimer.current = setTimeout(async () => {
+      try {
+        const { data } = await octokit.repos.getReadme({
+          owner: GITHUB_USERNAME,
+          repo: repo.name,
+        });
+        const content = Buffer.from(data.content, "base64").toString("utf-8");
+        readmeCache.current.set(repo.id, content);
+        setReadme(content);
+      } catch {
+        readmeCache.current.set(repo.id, "");
+        setReadme("");
+      }
+      setReadmeLoading(false);
+    }, 200);
+  }, [cursor, repos, screen]);
+
   function showNotification(msg: string) {
     setNotification(msg);
     setTimeout(() => setNotification(null), 2500);
@@ -192,18 +419,30 @@ function App() {
 
   useInput((input, key) => {
     if (screen === "list") {
-      if (key.upArrow || input === "k") moveCursor(-1);
-      if (key.downArrow || input === "j") moveCursor(1);
-      if (input === " " || key.return) setScreen("detail");
-      if (input === "s") toggleSelected(cursor);
-      if (input === "r" && repos[cursor]) {
-        setRenameValue(repos[cursor].name);
-        setScreen("rename");
+      if (key.tab) {
+        setFocusPane((p) => (p === "list" ? "readme" : "list"));
+        return;
       }
-      if (input === "v" && repos[cursor] && !updating) handleToggleVisibility();
-      if (input === "c" && repos[cursor]) setScreen("clone");
-      if (input === "n") { setCreateName(""); setScreen("create"); }
-      if (input === "d" && selected.size > 0) setScreen("confirm");
+      if (focusPane === "list") {
+        if (key.upArrow || input === "k") moveCursor(-1);
+        if (key.downArrow || input === "j") moveCursor(1);
+        if (input === " " || key.return) setScreen("detail");
+        if (input === "s") toggleSelected(cursor);
+        if (input === "r" && repos[cursor]) {
+          setRenameValue(repos[cursor].name);
+          setScreen("rename");
+        }
+        if (input === "v" && repos[cursor] && !updating) handleToggleVisibility();
+        if (input === "c" && repos[cursor]) setScreen("clone");
+        if (input === "n") { setCreateName(""); setScreen("create"); }
+        if (input === "d" && selected.size > 0) setScreen("confirm");
+      }
+      if (focusPane === "readme") {
+        if (key.upArrow || input === "k") setReadmeScroll((s) => Math.max(0, s - 1));
+        if (key.downArrow || input === "j") setReadmeScroll((s) => s + 1);
+        if (key.pageDown) setReadmeScroll((s) => s + 10);
+        if (key.pageUp) setReadmeScroll((s) => Math.max(0, s - 10));
+      }
       if (input === "q") exit();
     }
 
@@ -449,7 +688,8 @@ function App() {
           <Hint keys="r" action="rename" />
           <Hint keys="v" action="visibility" />
           <Hint keys="c" action="clone" />
-          <Hint keys="q" action="quit" />
+        <Hint keys="tab" action="pane" />
+        <Hint keys="q" action="quit" />
         </Box>
       </Box>
     );
@@ -530,31 +770,65 @@ function App() {
         <Hint keys="c" action="clone" />
         <Hint keys="s" action="select" />
         {selected.size > 0 && <Hint keys="d" action="delete" />}
+        <Hint keys="tab" action="readme" />
         <Hint keys="q" action="quit" />
       </Box>
 
-      {/* ── Scrollable repo list ── */}
-      <Box flexDirection="column" borderStyle="round" borderColor="cyan">
-        {/* Always render both indicator slots to keep list height stable */}
-        <Box paddingX={1}>
-          {aboveCount > 0
-            ? <Text dimColor>↑ {aboveCount} more above</Text>
-            : <Text> </Text>}
+      {/* ── Main content: list (left) + README (right) ── */}
+      <Box flexDirection="row" height={visibleCount + LIST_BORDER_LINES + INDICATOR_LINES} overflow="hidden">
+        {/* ── Repo list — fixed width in split mode ── */}
+        <Box
+          flexDirection="column"
+          borderStyle="round"
+          borderColor={focusPane === "list" ? "cyanBright" : "gray"}
+          width={LIST_SPLIT_WIDTH}
+          overflow="hidden"
+        >
+          <Box paddingX={1}>
+            {aboveCount > 0 ? (
+              <Text dimColor>↑ {aboveCount} above</Text>
+            ) : (
+              <Text> </Text>
+            )}
+          </Box>
+
+          {visibleRepos.map((repo, vi) => (
+            <RepoRow
+              key={repo.id}
+              repo={repo}
+              isCursor={vi + scrollOffset === cursor}
+              isSelected={selected.has(vi + scrollOffset)}
+              compact
+            />
+          ))}
+
+          <Box paddingX={1}>
+            {belowCount > 0 ? (
+              <Text dimColor>↓ {belowCount} below</Text>
+            ) : (
+              <Text> </Text>
+            )}
+          </Box>
         </Box>
 
-        {visibleRepos.map((repo, vi) => (
-          <RepoRow
-            key={repo.id}
-            repo={repo}
-            isCursor={vi + scrollOffset === cursor}
-            isSelected={selected.has(vi + scrollOffset)}
-          />
-        ))}
-
-        <Box paddingX={1}>
-          {belowCount > 0
-            ? <Text dimColor>↓ {belowCount} more below</Text>
-            : <Text> </Text>}
+        {/* ── README pane — fills remaining width ── */}
+        <Box
+          flexDirection="column"
+          borderStyle="round"
+          borderColor={focusPane === "readme" ? "cyanBright" : "gray"}
+          width={terminalWidth - LIST_SPLIT_WIDTH}
+          paddingX={1}
+          overflow="hidden"
+        >
+          {readmeLoading ? (
+            <Text color="yellow">⟳ loading readme…</Text>
+          ) : readme ? (
+            <MarkdownRenderer content={readme} width={terminalWidth - LIST_SPLIT_WIDTH - 4} scroll={readmeScroll} height={visibleCount} />
+          ) : readme === "" ? (
+            <Text dimColor>No README found.</Text>
+          ) : (
+            <Text dimColor>…</Text>
+          )}
         </Box>
       </Box>
 
