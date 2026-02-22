@@ -239,17 +239,17 @@ function wrapText(text: string, width: number): string[] {
   return result;
 }
 
-// ── LAZYGH logo — 6 lines, cyan → green gradient ──────────────
+// ── GHDECK logo — 6 lines, cyan → green gradient ──────────────
 // Memoized: never re-renders (no props, no deps)
 const Logo = React.memo(function Logo() {
   return (
     <Box flexDirection="column">
-      <Text color="cyanBright" bold>{"██╗      █████╗ ███████╗██╗   ██╗ ██████╗ ██╗  ██╗"}</Text>
-      <Text color="cyan"       bold>{"██║     ██╔══██╗╚══███╔╝╚██╗ ██╔╝██╔════╝ ██║  ██║"}</Text>
-      <Text color="cyan"       bold>{"██║     ███████║  ███╔╝  ╚████╔╝ ██║  ███╗███████║"}</Text>
-      <Text color="green"      bold>{"██║     ██╔══██║ ███╔╝    ╚██╔╝  ██║   ██║██╔══██║"}</Text>
-      <Text color="green"      bold>{"███████╗██║  ██║███████╗   ██║   ╚██████╔╝██║  ██║"}</Text>
-      <Text color="greenBright" bold>{"╚══════╝╚═╝  ╚═╝╚══════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝"}</Text>
+      <Text color="cyanBright" bold>{"  ██████╗ ██╗  ██╗██████╗ ███████╗ ██████╗██╗  ██╗"}</Text>
+      <Text color="cyan"       bold>{" ██╔════╝ ██║  ██║██╔══██╗██╔════╝██╔════╝██║ ██╔╝"}</Text>
+      <Text color="cyan"       bold>{" ██║  ███╗███████║██║  ██║█████╗  ██║     █████╔╝ "}</Text>
+      <Text color="green"      bold>{" ██║   ██║██╔══██║██║  ██║██╔══╝  ██║     ██╔═██╗ "}</Text>
+      <Text color="green"      bold>{" ╚██████╔╝██║  ██║██████╔╝███████╗╚██████╗██║  ██╗"}</Text>
+      <Text color="greenBright" bold>{"  ╚═════╝ ╚═╝  ╚═╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝"}</Text>
     </Box>
   );
 });
@@ -743,7 +743,7 @@ function App() {
         */}
         <Box flexDirection="column" justifyContent="center" gap={0} height={6}>
           <Box gap={1}>
-            <Text bold color="cyanBright">lazygh</Text>
+            <Text bold color="cyanBright">ghdeck</Text>
             <Text dimColor>·</Text>
             <Text color="white">@{GITHUB_USERNAME}</Text>
           </Box>

@@ -1,26 +1,25 @@
 ```
-██╗      █████╗ ███████╗██╗   ██╗ ██████╗ ██╗  ██╗
-██║     ██╔══██╗╚══███╔╝╚██╗ ██╔╝██╔════╝ ██║  ██║
-██║     ███████║  ███╔╝  ╚████╔╝ ██║  ███╗███████║
-██║     ██╔══██║ ███╔╝    ╚██╔╝  ██║   ██║██╔══██║
-███████╗██║  ██║███████╗   ██║   ╚██████╔╝██║  ██║
-╚══════╝╚═╝  ╚═╝╚══════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝
+  ██████╗ ██╗  ██╗██████╗ ███████╗ ██████╗██╗  ██╗
+ ██╔════╝ ██║  ██║██╔══██╗██╔════╝██╔════╝██║ ██╔╝
+ ██║  ███╗███████║██║  ██║█████╗  ██║     █████╔╝
+ ██║   ██║██╔══██║██║  ██║██╔══╝  ██║     ██╔═██╗
+ ╚██████╔╝██║  ██║██████╔╝███████╗╚██████╗██║  ██╗
+  ╚═════╝ ╚═╝  ╚═╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝
 ```
 
-A lazy terminal UI for managing your GitHub repositories — built with [Ink](https://github.com/vadimdemedes/ink) (React for CLIs) and TypeScript.
+A terminal UI dashboard for managing your GitHub repositories — built with [Ink](https://github.com/vadimdemedes/ink) and React.
 
 ---
 
 ## Features
 
-- **Browse** all your repos with a scrollable, framed list
-- **Detail view** — description, language, stars, last push, URL
-- **Create** a new repository without leaving the terminal
-- **Rename** any repo with an inline text editor
-- **Toggle visibility** — flip public ↔ private in one keypress
-- **Copy clone URLs** — SSH or HTTPS straight to your clipboard
-- **Delete** one or many repos (with a confirmation prompt)
-- Flicker-free rendering via synchronized terminal output (BSU)
+- **Split-view layout** — repo list on the left, README preview on the right
+- **Markdown rendering** — parses and renders README files with syntax highlighting for headings, code, lists, links, and more
+- **Repo management** — rename, toggle visibility (public/private), create, and delete repos
+- **Clone URLs** — copy SSH or HTTPS clone URLs to clipboard
+- **Keyboard-driven** — fully navigable with keyboard shortcuts, no mouse needed
+- **Scrollable README** — Tab to switch panes, scroll with j/k or arrow keys
+- **Flicker-free rendering** — synchronized terminal output (BSU)
 
 ---
 
@@ -34,8 +33,8 @@ A lazy terminal UI for managing your GitHub repositories — built with [Ink](ht
 ## Setup
 
 ```bash
-git clone https://github.com/your-username/lazygh
-cd lazygh
+git clone https://github.com/your-username/ghdeck.git
+cd ghdeck
 npm install
 ```
 
@@ -64,7 +63,8 @@ npm start
 |-----|--------|
 | `↑` / `k` | Move cursor up |
 | `↓` / `j` | Move cursor down |
-| `enter` / `space` | Open detail view |
+| `Tab` | Switch focus to README pane |
+| `Enter` / `Space` | Open detail view |
 | `n` | Create new repository |
 | `r` | Rename repository |
 | `v` | Toggle public / private |
@@ -73,11 +73,21 @@ npm start
 | `d` | Delete all marked repos |
 | `q` | Quit |
 
+### README pane (Tab to focus)
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Scroll up |
+| `↓` / `j` | Scroll down |
+| `PageUp` | Scroll up 10 lines |
+| `PageDown` | Scroll down 10 lines |
+| `Tab` | Switch focus back to repo list |
+
 ### Detail view
 
 | Key | Action |
 |-----|--------|
-| `esc` / `←` | Back to list |
+| `Esc` / `←` | Back to list |
 | `r` | Rename |
 | `v` | Toggle visibility |
 | `c` | Clone URLs |
@@ -90,16 +100,16 @@ npm start
 |-----|--------|
 | `1` | Copy SSH URL to clipboard |
 | `2` | Copy HTTPS URL to clipboard |
-| `esc` | Back |
+| `Esc` | Back |
 
 ### Rename / Create screens
 
 | Key | Action |
 |-----|--------|
 | any char | Type |
-| `backspace` | Delete last character |
-| `↵` | Confirm |
-| `esc` | Cancel |
+| `Backspace` | Delete last character |
+| `Enter` | Confirm |
+| `Esc` | Cancel |
 
 ---
 
@@ -110,4 +120,11 @@ npm start
 | Runtime | [tsx](https://github.com/privatenumber/tsx) (no build step) |
 | UI | [Ink](https://github.com/vadimdemedes/ink) v5 + React 18 |
 | GitHub API | [@octokit/rest](https://github.com/octokit/rest.js) |
+| Markdown | [remark](https://github.com/remarkjs/remark) + remark-gfm |
 | Language | TypeScript |
+
+---
+
+## License
+
+MIT
