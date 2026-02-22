@@ -580,6 +580,24 @@ function App() {
 
   const selectedRepo = repos[cursor];
 
+  // ── Missing config ─────────────────────────────────────────────
+  if (!GITHUB_USERNAME || !GITHUB_TOKEN) {
+    return (
+      <Box flexDirection="column" padding={1} gap={1}>
+        <Logo />
+        <Text color="red" bold>Missing environment variables</Text>
+        {!GITHUB_USERNAME && <Text color="yellow">  GITHUB_USER is not set</Text>}
+        {!GITHUB_TOKEN && <Text color="yellow">  GITHUB_TOKEN is not set</Text>}
+        <Text> </Text>
+        <Text dimColor>Create a .env file in the project root:</Text>
+        <Text color="cyan">  GITHUB_USER=your-github-username</Text>
+        <Text color="cyan">  GITHUB_TOKEN=ghp_your_personal_access_token</Text>
+        <Text> </Text>
+        <Text dimColor>Press q to quit.</Text>
+      </Box>
+    );
+  }
+
   // ── Loading / error ───────────────────────────────────────────
   if (loading) {
     return (
