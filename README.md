@@ -11,6 +11,8 @@ A terminal UI dashboard for managing your GitHub repositories — built with [In
 
 ---
 
+<img width="1470" height="956" alt="Screenshot 2026-02-25 at 08 36 33" src="https://github.com/user-attachments/assets/131f8515-ee9e-48a6-bb28-7d4110e06a0f" />
+
 ## Features
 
 - **Split-view layout** — repo list on the left, README preview on the right
